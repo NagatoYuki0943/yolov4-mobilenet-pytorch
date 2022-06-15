@@ -61,7 +61,7 @@ class MobileNetV3(nn.Module):
 #   EfficientNet: 倒残差结构
 #   1x1 3x3DWConv SE 1x1
 #---------------------------------------------------#
-class Efficient(nn.Module):
+class EfficientNet(nn.Module):
     def __init__(self, backbone, pretrained = False):
         super().__init__()
         efficientnet = {
@@ -327,7 +327,7 @@ class YoloBody(nn.Module):
             #---------------------------------------------------#
             #   52,52,256; 26,26,512; 13,13,1024
             #---------------------------------------------------#
-            self.backbone   = Efficient(backbone, pretrained=pretrained)
+            self.backbone   = EfficientNet(backbone, pretrained=pretrained)
             in_filters = {
                 "efficientnet_b0": [40, 112, 320],
                 "efficientnet_b1": [40, 112, 320],
