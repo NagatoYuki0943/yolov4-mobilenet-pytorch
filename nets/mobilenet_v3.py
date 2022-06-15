@@ -1,3 +1,8 @@
+#---------------------------------------------------#
+#   MobileNet-V3: 倒残差结构
+#   1x1 3x3DWConv SE 1x1
+#---------------------------------------------------#
+
 import math
 
 import torch
@@ -13,6 +18,9 @@ def _make_divisible(v, divisor, min_value=None):
         new_v += divisor
     return new_v
 
+#---------------------------------------------------#
+#   nn.Hardsigmoid
+#---------------------------------------------------#
 class h_sigmoid(nn.Module):
     def __init__(self, inplace=True):
         super(h_sigmoid, self).__init__()
@@ -21,7 +29,9 @@ class h_sigmoid(nn.Module):
     def forward(self, x):
         return self.relu(x + 3) / 6
 
-
+#---------------------------------------------------#
+#   nn.Hardswish()
+#---------------------------------------------------#
 class h_swish(nn.Module):
     def __init__(self, inplace=True):
         super(h_swish, self).__init__()
@@ -30,7 +40,9 @@ class h_swish(nn.Module):
     def forward(self, x):
         return x * self.sigmoid(x)
 
-
+#---------------------------------------------------#
+#   注意力机制
+#---------------------------------------------------#
 class SELayer(nn.Module):
     def __init__(self, channel, reduction=4):
         super(SELayer, self).__init__()
@@ -48,14 +60,12 @@ class SELayer(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y
 
-
 def conv_3x3_bn(inp, oup, stride):
     return nn.Sequential(
         nn.Conv2d(inp, oup, 3, stride, 1, bias=False),
         nn.BatchNorm2d(oup),
         h_swish()
     )
-
 
 def conv_1x1_bn(inp, oup):
     return nn.Sequential(
@@ -64,29 +74,42 @@ def conv_1x1_bn(inp, oup):
         h_swish()
     )
 
-
+#---------------------------------------------------#
+#   倒残差结构
+#   残差:   两端channel多,中间channel少
+#       降维 --> 升维
+#   倒残差: 两端channel少,中间channel多
+#       升维 --> 降维
+#   1x1 3x3DWConv SE 1x1
+#   最后的1x1Conv没有激活函数
+#---------------------------------------------------#
 class InvertedResidual(nn.Module):
     def __init__(self, inp, hidden_dim, oup, kernel_size, stride, use_se, use_hs):
         super(InvertedResidual, self).__init__()
         assert stride in [1, 2]
 
+        # 步长为1同时通道不变化才相加
         self.identity = stride == 1 and inp == oup
 
+        #---------------------------------------------------#
+        #   输入和输出通道相等就不要第一个1x1Conv
+        #---------------------------------------------------#
         if inp == hidden_dim:
             self.conv = nn.Sequential(
                 # dw
                 nn.Conv2d(hidden_dim, hidden_dim, kernel_size, stride, (kernel_size - 1) // 2, groups=hidden_dim, bias=False),
                 nn.BatchNorm2d(hidden_dim),
                 h_swish() if use_hs else nn.ReLU(inplace=True),
+
                 # Squeeze-and-Excite
                 SELayer(hidden_dim) if use_se else nn.Identity(),
-                # pw-linear
+
+                # pw-linear 没有激活函数
                 nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
                 nn.BatchNorm2d(oup),
             )
         else:
             self.conv = nn.Sequential(
-
                 # pw
                 nn.Conv2d(inp, hidden_dim, 1, 1, 0, bias=False),
                 nn.BatchNorm2d(hidden_dim),
@@ -98,10 +121,9 @@ class InvertedResidual(nn.Module):
 
                 # Squeeze-and-Excite
                 SELayer(hidden_dim) if use_se else nn.Identity(),
-
                 h_swish() if use_hs else nn.ReLU(inplace=True),
 
-                # pw-linear
+                # pw-linear 没有激活函数
                 nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
                 nn.BatchNorm2d(oup),
             )
@@ -118,7 +140,7 @@ class MobileNetV3(nn.Module):
         super(MobileNetV3, self).__init__()
         # setting of inverted residual blocks
         self.cfgs = [
-            #`   k,   t,   c, SE,HS,s 
+            #    k, 扩展倍率,c, SE,HS,s
                 # 208,208,16 -> 208,208,16
                 [3,   1,  16, 0, 0, 1],
 
@@ -129,7 +151,7 @@ class MobileNetV3(nn.Module):
                 # 104,104,24 -> 52,52,40
                 [5,   3,  40, 1, 0, 2],
                 [5,   3,  40, 1, 0, 1],
-                [5,   3,  40, 1, 0, 1],
+                [5,   3,  40, 1, 0, 1],     # out3 index:6
 
                 # 52,52,40 -> 26,26,80
                 [3,   6,  80, 0, 1, 2],
@@ -139,18 +161,25 @@ class MobileNetV3(nn.Module):
 
                 # 26,26,80 -> 26,26,112
                 [3,   6, 112, 1, 1, 1],
-                [3,   6, 112, 1, 1, 1],
+                [3,   6, 112, 1, 1, 1],     # out4 index:12
 
                 # 26,26,112 -> 13,13,160
                 [5,   6, 160, 1, 1, 2],
                 [5,   6, 160, 1, 1, 1],
-                [5,   6, 160, 1, 1, 1]
+                [5,   6, 160, 1, 1, 1]      # out5 index:15
         ]
 
+        #-----------------------------------#
+        #   第一层卷积  V2中是32,这里改为了16
+        #   416,416,3 -> 208,208,16
+        #-----------------------------------#
         input_channel = _make_divisible(16 * width_mult, 8)
-        # 416,416,3 -> 208,208,16
         layers = [conv_3x3_bn(3, input_channel, 2)]
 
+        #-----------------------------------#
+        #   重复添加15次DW卷积
+        #   208,208,16 -> 13,13,160
+        #-----------------------------------#
         block = InvertedResidual
         for k, t, c, use_se, use_hs, s in self.cfgs:
             output_channel = _make_divisible(c * width_mult, 8)
@@ -159,9 +188,15 @@ class MobileNetV3(nn.Module):
             input_channel = output_channel
         self.features = nn.Sequential(*layers)
 
+        #-----------------------------------#
+        #   最后一层卷积
+        #   7,7,160 -> 7,7,960
+        #-----------------------------------#
         self.conv = conv_1x1_bn(input_channel, exp_size)
+
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         output_channel = _make_divisible(1280 * width_mult, 8) if width_mult > 1.0 else 1280
+        # b,960 -> b,1280 -> b,num_classes
         self.classifier = nn.Sequential(
             nn.Linear(exp_size, output_channel),
             h_swish(),

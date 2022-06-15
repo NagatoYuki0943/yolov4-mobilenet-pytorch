@@ -53,7 +53,7 @@ class DecodeBox():
             #-----------------------------------------------#
             #   先验框的中心位置的调整参数
             #-----------------------------------------------#
-            x = torch.sigmoid(prediction[..., 0])  
+            x = torch.sigmoid(prediction[..., 0])
             y = torch.sigmoid(prediction[..., 1])
             #-----------------------------------------------#
             #   先验框的宽高调整参数
@@ -73,7 +73,7 @@ class DecodeBox():
             LongTensor  = torch.cuda.LongTensor if x.is_cuda else torch.LongTensor
 
             #----------------------------------------------------------#
-            #   生成网格，先验框中心，网格左上角 
+            #   生成网格，先验框中心，网格左上角
             #   batch_size,3,13,13
             #----------------------------------------------------------#
             grid_x = torch.linspace(0, input_width - 1, input_width).repeat(input_height, 1).repeat(
@@ -196,12 +196,12 @@ class DecodeBox():
                 #   使用官方自带的非极大抑制会速度更快一些！
                 #------------------------------------------#
                 keep = nms(
-                    detections_class[:, :4],
-                    detections_class[:, 4] * detections_class[:, 5],
+                    detections_class[:, :4],                            # 坐标
+                    detections_class[:, 4] * detections_class[:, 5],    # 先验框置信度 * 种类置信度 结果是1维数据
                     nms_thres
                 )
                 max_detections = detections_class[keep]
-                
+
                 # # 按照存在物体的置信度排序
                 # _, conf_sort_index = torch.sort(detections_class[:, 4]*detections_class[:, 5], descending=True)
                 # detections_class = detections_class[conf_sort_index]
@@ -216,10 +216,10 @@ class DecodeBox():
                 #     detections_class = detections_class[1:][ious < nms_thres]
                 # # 堆叠
                 # max_detections = torch.cat(max_detections).data
-                
+
                 # Add max detections to outputs
                 output[i] = max_detections if output[i] is None else torch.cat((output[i], max_detections))
-            
+
             if output[i] is not None:
                 output[i]           = output[i].cpu().numpy()
                 box_xy, box_wh      = (output[i][:, 0:2] + output[i][:, 2:4])/2, output[i][:, 2:4] - output[i][:, 0:2]

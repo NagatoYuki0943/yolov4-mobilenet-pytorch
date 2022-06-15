@@ -7,11 +7,11 @@ from PIL import Image
 #---------------------------------------------------------#
 def cvtColor(image):
     if len(np.shape(image)) == 3 and np.shape(image)[2] == 3:
-        return image 
+        return image
     else:
         image = image.convert('RGB')
-        return image 
-    
+        return image
+
 #---------------------------------------------------#
 #   对输入图像进行resize
 #---------------------------------------------------#
@@ -73,7 +73,7 @@ def show_config(**kwargs):
 def download_weights(backbone, model_dir="./model_data"):
     import os
     from torch.hub import load_state_dict_from_url
-    
+
     download_urls = {
         'densenet121'   : 'https://download.pytorch.org/models/densenet121-a639ec97.pth',
         'densenet169'   : 'https://download.pytorch.org/models/densenet169-b2777c0a.pth',
@@ -86,7 +86,7 @@ def download_weights(backbone, model_dir="./model_data"):
         'ghostnet'      : 'https://github.com/bubbliiiing/mobilenet-yolov4-pytorch/releases/download/v1.0/ghostnet_weights.pth',
     }
     url = download_urls[backbone]
-    
+
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
     load_state_dict_from_url(url, model_dir)

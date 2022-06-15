@@ -42,7 +42,7 @@ class YoloDataset(Dataset):
             lines.append(self.annotation_lines[index])
             shuffle(lines)
             image, box  = self.get_random_data_with_Mosaic(lines, self.input_shape)
-            
+
             if self.mixup and self.rand() < self.mixup_prob:
                 lines           = sample(self.annotation_lines, 1)
                 image_2, box_2  = self.get_random_data(lines[0], self.input_shape, random = self.train)
@@ -110,7 +110,7 @@ class YoloDataset(Dataset):
                 box = box[np.logical_and(box_w>1, box_h>1)] # discard invalid box
 
             return image_data, box
-                
+
         #------------------------------------------#
         #   对图像进行缩放并且进行长和宽的扭曲
         #------------------------------------------#
@@ -174,10 +174,10 @@ class YoloDataset(Dataset):
             box[:, 3][box[:, 3]>h] = h
             box_w = box[:, 2] - box[:, 0]
             box_h = box[:, 3] - box[:, 1]
-            box = box[np.logical_and(box_w>1, box_h>1)] 
-        
+            box = box[np.logical_and(box_w>1, box_h>1)]
+
         return image_data, box
-    
+
     def merge_bboxes(self, bboxes, cutx, cuty):
         merge_bbox = []
         for i in range(len(bboxes)):
@@ -229,7 +229,7 @@ class YoloDataset(Dataset):
         min_offset_x = self.rand(0.3, 0.7)
         min_offset_y = self.rand(0.3, 0.7)
 
-        image_datas = [] 
+        image_datas = []
         box_datas   = []
         index       = 0
         for line in annotation_line:
@@ -242,7 +242,7 @@ class YoloDataset(Dataset):
             #---------------------------------#
             image = Image.open(line_content[0])
             image = cvtColor(image)
-            
+
             #---------------------------------#
             #   图片的大小
             #---------------------------------#
@@ -251,7 +251,7 @@ class YoloDataset(Dataset):
             #   保存框的位置
             #---------------------------------#
             box = np.array([np.array(list(map(int,box.split(',')))) for box in line_content[1:]])
-            
+
             #---------------------------------#
             #   是否翻转图片
             #---------------------------------#
@@ -288,7 +288,7 @@ class YoloDataset(Dataset):
             elif index == 3:
                 dx = int(w*min_offset_x)
                 dy = int(h*min_offset_y) - nh
-            
+
             new_image = Image.new('RGB', (w,h), (128,128,128))
             new_image.paste(image, (dx, dy))
             image_data = np.array(new_image)
@@ -310,7 +310,7 @@ class YoloDataset(Dataset):
                 box = box[np.logical_and(box_w>1, box_h>1)]
                 box_data = np.zeros((len(box),5))
                 box_data[:len(box)] = box
-            
+
             image_datas.append(image_data)
             box_datas.append(box_data)
 

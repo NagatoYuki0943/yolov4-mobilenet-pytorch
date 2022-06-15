@@ -1,3 +1,10 @@
+"""
+制作自己的训练集
+会生成VOCdevkit/VOC2007/ImageSets里面的txt以及根目录的训练用的2007_train.txt、2007_val.txt
+
+一定要修改classes_path为自己的分类文件
+"""
+
 import os
 import random
 import xml.etree.ElementTree as ET
@@ -8,9 +15,9 @@ from utils.utils import get_classes
 
 #--------------------------------------------------------------------------------------------------------------------------------#
 #   annotation_mode用于指定该文件运行时计算的内容
-#   annotation_mode为0代表整个标签处理过程，包括获得VOCdevkit/VOC2007/ImageSets里面的txt以及训练用的2007_train.txt、2007_val.txt
-#   annotation_mode为1代表获得VOCdevkit/VOC2007/ImageSets里面的txt
-#   annotation_mode为2代表获得训练用的2007_train.txt、2007_val.txt
+#   annotation_mode为0代表整个标签处理过程，包括生成VOCdevkit/VOC2007/ImageSets里面的txt以及根目录的训练用的2007_train.txt、2007_val.txt
+#   annotation_mode为1代表生成VOCdevkit/VOC2007/ImageSets里面的txt
+#   annotation_mode为2代表生成训练用的2007_train.txt、2007_val.txt
 #--------------------------------------------------------------------------------------------------------------------------------#
 annotation_mode     = 0
 #-------------------------------------------------------------------#
@@ -26,7 +33,7 @@ classes_path        = 'model_data/voc_classes.txt'
 #   train_percent用于指定(训练集+验证集)中训练集与验证集的比例，默认情况下 训练集:验证集 = 9:1
 #   仅在annotation_mode为0和1的时候有效
 #--------------------------------------------------------------------------------------------------------------------------------#
-trainval_percent    = 0.9
+trainval_percent    = 1
 train_percent       = 0.9
 #-------------------------------------------------------#
 #   指向VOC数据集所在的文件夹
@@ -48,7 +55,7 @@ def convert_annotation(year, image_id, list_file):
     root = tree.getroot()
 
     for obj in root.iter('object'):
-        difficult = 0 
+        difficult = 0
         if obj.find('difficult')!=None:
             difficult = obj.find('difficult').text
         cls = obj.find('name').text
@@ -58,9 +65,9 @@ def convert_annotation(year, image_id, list_file):
         xmlbox = obj.find('bndbox')
         b = (int(float(xmlbox.find('xmin').text)), int(float(xmlbox.find('ymin').text)), int(float(xmlbox.find('xmax').text)), int(float(xmlbox.find('ymax').text)))
         list_file.write(" " + ",".join([str(a) for a in b]) + ',' + str(cls_id))
-        
+
         nums[classes.index(cls)] = nums[classes.index(cls)] + 1
-        
+
 if __name__ == "__main__":
     random.seed(0)
     if " " in os.path.abspath(VOCdevkit_path):
@@ -76,34 +83,34 @@ if __name__ == "__main__":
             if xml.endswith(".xml"):
                 total_xml.append(xml)
 
-        num     = len(total_xml)  
-        list    = range(num)  
-        tv      = int(num*trainval_percent)  
-        tr      = int(tv*train_percent)  
-        trainval= random.sample(list,tv)  
-        train   = random.sample(trainval,tr)  
-        
+        num     = len(total_xml)
+        list    = range(num)
+        tv      = int(num*trainval_percent)
+        tr      = int(tv*train_percent)
+        trainval= random.sample(list,tv)
+        train   = random.sample(trainval,tr)
+
         print("train and val size",tv)
         print("train size",tr)
-        ftrainval   = open(os.path.join(saveBasePath,'trainval.txt'), 'w')  
-        ftest       = open(os.path.join(saveBasePath,'test.txt'), 'w')  
-        ftrain      = open(os.path.join(saveBasePath,'train.txt'), 'w')  
-        fval        = open(os.path.join(saveBasePath,'val.txt'), 'w')  
-        
-        for i in list:  
-            name=total_xml[i][:-4]+'\n'  
-            if i in trainval:  
-                ftrainval.write(name)  
-                if i in train:  
-                    ftrain.write(name)  
-                else:  
-                    fval.write(name)  
-            else:  
-                ftest.write(name)  
-        
-        ftrainval.close()  
-        ftrain.close()  
-        fval.close()  
+        ftrainval   = open(os.path.join(saveBasePath,'trainval.txt'), 'w')
+        ftest       = open(os.path.join(saveBasePath,'test.txt'), 'w')
+        ftrain      = open(os.path.join(saveBasePath,'train.txt'), 'w')
+        fval        = open(os.path.join(saveBasePath,'val.txt'), 'w')
+
+        for i in list:
+            name=total_xml[i][:-4]+'\n'
+            if i in trainval:
+                ftrainval.write(name)
+                if i in train:
+                    ftrain.write(name)
+                else:
+                    fval.write(name)
+            else:
+                ftest.write(name)
+
+        ftrainval.close()
+        ftrain.close()
+        fval.close()
         ftest.close()
         print("Generate txt in ImageSets done.")
 
@@ -122,7 +129,7 @@ if __name__ == "__main__":
             type_index += 1
             list_file.close()
         print("Generate 2007_train.txt and 2007_val.txt for train done.")
-        
+
         def printTable(List1, List2):
             for i in range(len(List1[0])):
                 print("|", end=' ')

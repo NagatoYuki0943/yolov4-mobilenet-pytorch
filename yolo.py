@@ -1,3 +1,7 @@
+"""
+model_path ,classes_path, input_shape, backbone, confidence, nms_iou
+"""
+
 import colorsys
 import os
 import time
@@ -25,7 +29,7 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         #--------------------------------------------------------------------------#
-        "model_path"        : 'model_data/yolov4_mobilenet_v1_voc.pth',
+        "model_path"        : 'model_data/yolov4_mobilenet_v3_voc.pth',
         "classes_path"      : 'model_data/voc_classes.txt',
         #---------------------------------------------------------------------#
         #   anchors_path代表先验框对应的txt文件，一般不修改。
@@ -38,15 +42,16 @@ class YOLO(object):
         #---------------------------------------------------------------------#
         "input_shape"       : [416, 416],
         #---------------------------------------------------------------------#
-        #   检测网络所使用的主干
+        #   检测网络所使用的主干: mobilenetv1, mobilenetv2, mobilenetv3, ghostnet, vgg, densenet121, densenet169, densenet201, resnet50,
+        #   efficientnet_b0, efficientnet_b1, efficientnet_b2, efficientnet_b3, efficientnet_b4, efficientnet_b5, efficientnet_b6, efficientnet_b7
         #---------------------------------------------------------------------#
-        "backbone"          : 'mobilenetv1',
+        "backbone"          : 'mobilenetv3',
         #---------------------------------------------------------------------#
         #   只有得分大于置信度的预测框会被保留下来
         #---------------------------------------------------------------------#
         "confidence"        : 0.5,
         #---------------------------------------------------------------------#
-        #   非极大抑制所用到的nms_iou大小
+        #   非极大抑制所用到的nms_iou大小,越小代表越严格
         #---------------------------------------------------------------------#
         "nms_iou"           : 0.3,
         #---------------------------------------------------------------------#
@@ -75,7 +80,7 @@ class YOLO(object):
         self.__dict__.update(self._defaults)
         for name, value in kwargs.items():
             setattr(self, name, value)
-            
+
         #---------------------------------------------------#
         #   获得种类和先验框的数量
         #---------------------------------------------------#

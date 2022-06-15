@@ -11,39 +11,78 @@ from .mobilenet_v2 import mobilenet_v2
 from .mobilenet_v3 import mobilenet_v3
 from .resnet import resnet50
 from .vgg import vgg
+from .efficientnet_v1 import efficientnet_b0, efficientnet_b1, efficientnet_b2, efficientnet_b3, efficientnet_b4, efficientnet_b5, efficientnet_b6 ,efficientnet_b7
 
-
+#---------------------------------------------------#
+#   MobileNet-V1: 深度可分离卷积
+#---------------------------------------------------#
 class MobileNetV1(nn.Module):
     def __init__(self, pretrained = False):
         super(MobileNetV1, self).__init__()
         self.model = mobilenet_v1(pretrained=pretrained)
 
     def forward(self, x):
-        out3 = self.model.stage1(x)
-        out4 = self.model.stage2(out3)
-        out5 = self.model.stage3(out4)
+        out3 = self.model.stage1(x)     # 416,416,3 -> 52,52,256
+        out4 = self.model.stage2(out3)  # 52,52,256 -> 26,26,512
+        out5 = self.model.stage3(out4)  # 26,26,512 -> 13,13,1024
         return out3, out4, out5
 
+#---------------------------------------------------#
+#   MobileNet-V2: 倒残差结构
+#   1x1 3x3DWConv 1x1
+#---------------------------------------------------#
 class MobileNetV2(nn.Module):
     def __init__(self, pretrained = False):
         super(MobileNetV2, self).__init__()
         self.model = mobilenet_v2(pretrained=pretrained)
 
     def forward(self, x):
-        out3 = self.model.features[:7](x)
-        out4 = self.model.features[7:14](out3)
-        out5 = self.model.features[14:18](out4)
+        out3 = self.model.features[:7](x)       # 416,416,3 -> 52,52,32
+        out4 = self.model.features[7:14](out3)  #  52,52,32 -> 26,26,96
+        out5 = self.model.features[14:18](out4) #  26,26,96 -> 13,13,320
         return out3, out4, out5
 
+#---------------------------------------------------#
+#   MobileNet-V3: 倒残差结构
+#   1x1 3x3DWConv SE 1x1
+#---------------------------------------------------#
 class MobileNetV3(nn.Module):
     def __init__(self, pretrained = False):
         super(MobileNetV3, self).__init__()
         self.model = mobilenet_v3(pretrained=pretrained)
 
     def forward(self, x):
-        out3 = self.model.features[:7](x)
-        out4 = self.model.features[7:13](out3)
-        out5 = self.model.features[13:16](out4)
+        out3 = self.model.features[:7](x)       # 416,416,3 -> 52,52,40
+        out4 = self.model.features[7:13](out3)  # 52,52,40  -> 26,26,112
+        out5 = self.model.features[13:16](out4) # 26,26,112 -> 13,13,160
+        return out3, out4, out5
+
+#---------------------------------------------------#
+#   EfficientNet: 倒残差结构
+#   1x1 3x3DWConv SE 1x1
+#---------------------------------------------------#
+class Efficient(nn.Module):
+    def __init__(self, backbone, pretrained = False):
+        super().__init__()
+        efficientnet = {
+            "efficientnet_b0": efficientnet_b0,
+            "efficientnet_b1": efficientnet_b1,
+            "efficientnet_b2": efficientnet_b2,
+            "efficientnet_b3": efficientnet_b3,
+            "efficientnet_b4": efficientnet_b4,
+            "efficientnet_b5": efficientnet_b5,
+            "efficientnet_b6": efficientnet_b6,
+            "efficientnet_b7": efficientnet_b7
+        }[backbone]
+
+        self.model = efficientnet(pretrained)
+        del self.model.avgpool
+        del self.model.classifier
+
+    def forward(self, x):
+        out3 = self.model.features[0:4](x)      # 416,416,3 -> 52,52,40
+        out4 = self.model.features[4:6](out3)   # 52,52,40  -> 26,26,112
+        out5 = self.model.features[6:8](out4)   # 26,26,112 -> 13,13,320
         return out3, out4, out5
 
 class GhostNet(nn.Module):
@@ -89,8 +128,8 @@ class Densenet(nn.Module):
     def __init__(self, backbone, pretrained=False):
         super(Densenet, self).__init__()
         densenet = {
-            "densenet121" : densenet121, 
-            "densenet169" : densenet169, 
+            "densenet121" : densenet121,
+            "densenet169" : densenet169,
             "densenet201" : densenet201
         }[backbone]
         model = densenet(pretrained)
@@ -129,6 +168,11 @@ class ResNet(nn.Module):
         feat5   = self.model.layer4(feat4)
         return [feat3, feat4, feat5]
 
+
+#-------------------------------------------------#
+#   卷积块
+#   Conv2d + BatchNorm2d + LeakyReLU
+#-------------------------------------------------#
 def conv2d(filter_in, filter_out, kernel_size, groups=1, stride=1):
     pad = (kernel_size - 1) // 2 if kernel_size else 0
     return nn.Sequential(OrderedDict([
@@ -137,20 +181,28 @@ def conv2d(filter_in, filter_out, kernel_size, groups=1, stride=1):
         ("relu", nn.ReLU6(inplace=True)),
     ]))
 
+#---------------------------------------------------#
+#   dw+pw
+#   3x3DWConv + 1x1Conv
+#---------------------------------------------------#
 def conv_dw(filter_in, filter_out, stride = 1):
     return nn.Sequential(
+        # 3x3Conv
+        # in = put = groups
         nn.Conv2d(filter_in, filter_in, 3, stride, 1, groups=filter_in, bias=False),
         nn.BatchNorm2d(filter_in),
         nn.ReLU6(inplace=True),
 
+        # 1x1Conv
         nn.Conv2d(filter_in, filter_out, 1, 1, 0, bias=False),
         nn.BatchNorm2d(filter_out),
         nn.ReLU6(inplace=True),
     )
 
 #---------------------------------------------------#
-#   SPP结构，利用不同大小的池化核进行池化
-#   池化后堆叠
+#   SPP结构，利用不同大小的池化核进行池化,增大感受野
+#   池化后和输入数据进行维度堆叠
+#   pool_sizes=[1, 5, 9, 13] 1不变,所以不用做了
 #---------------------------------------------------#
 class SpatialPyramidPooling(nn.Module):
     def __init__(self, pool_sizes=[5, 9, 13]):
@@ -181,182 +233,208 @@ class Upsample(nn.Module):
         return x
 
 #---------------------------------------------------#
-#   三次卷积块
+#   三次卷积块 SPP前后的模块
 #---------------------------------------------------#
 def make_three_conv(filters_list, in_filters):
     m = nn.Sequential(
-        conv2d(in_filters, filters_list[0], 1),
-        conv_dw(filters_list[0], filters_list[1]),
-        conv2d(filters_list[1], filters_list[0], 1),
+        conv2d( in_filters,      filters_list[0], 1),    # 1 降低通道
+        conv_dw(filters_list[0], filters_list[1]),       # 3 DWConv提取特征
+        conv2d( filters_list[1], filters_list[0], 1),
     )
     return m
 
 #---------------------------------------------------#
-#   五次卷积块
+#   五次卷积块 PANet中使用
+#   3x3Conv -> 3x3DWConv
 #---------------------------------------------------#
 def make_five_conv(filters_list, in_filters):
     m = nn.Sequential(
-        conv2d(in_filters, filters_list[0], 1),
+        conv2d( in_filters,      filters_list[0], 1),    # 1 降低通道
+        conv_dw(filters_list[0], filters_list[1]),       # 3 DWConv提取特征
+        conv2d( filters_list[1], filters_list[0], 1),
         conv_dw(filters_list[0], filters_list[1]),
-        conv2d(filters_list[1], filters_list[0], 1),
-        conv_dw(filters_list[0], filters_list[1]),
-        conv2d(filters_list[1], filters_list[0], 1),
+        conv2d( filters_list[1], filters_list[0], 1),
     )
     return m
 
 #---------------------------------------------------#
 #   最后获得yolov4的输出
+#   3x3Conv -> 3x3DWConv
 #---------------------------------------------------#
 def yolo_head(filters_list, in_filters):
     m = nn.Sequential(
-        conv_dw(in_filters, filters_list[0]),
-        
-        nn.Conv2d(filters_list[0], filters_list[1], 1),
+        conv_dw(  in_filters,      filters_list[0]),     # 特征整合
+        nn.Conv2d(filters_list[0], filters_list[1], 1),  # 将通道转换为预测
     )
     return m
 
-    
 #---------------------------------------------------#
 #   yolo_body
 #---------------------------------------------------#
 class YoloBody(nn.Module):
     def __init__(self, anchors_mask, num_classes, backbone="mobilenetv2", pretrained=False):
         super(YoloBody, self).__init__()
-        #---------------------------------------------------#   
+        #---------------------------------------------------#
         #   生成mobilnet的主干模型，获得三个有效特征层。
         #---------------------------------------------------#
         if backbone == "mobilenetv1":
-            #---------------------------------------------------#   
-            #   52,52,256；26,26,512；13,13,1024
+            #---------------------------------------------------#
+            #   52,52,256; 26,26,512; 13,13,1024
             #---------------------------------------------------#
             self.backbone   = MobileNetV1(pretrained=pretrained)
             in_filters      = [256, 512, 1024]
         elif backbone == "mobilenetv2":
-            #---------------------------------------------------#   
-            #   52,52,32；26,26,92；13,13,320
+            #---------------------------------------------------#
+            #   52,52,32; 26,26,96; 13,13,320
             #---------------------------------------------------#
             self.backbone   = MobileNetV2(pretrained=pretrained)
             in_filters      = [32, 96, 320]
         elif backbone == "mobilenetv3":
-            #---------------------------------------------------#   
-            #   52,52,40；26,26,112；13,13,160
+            #---------------------------------------------------#
+            #   52,52,40; 26,26,112; 13,13,160
             #---------------------------------------------------#
             self.backbone   = MobileNetV3(pretrained=pretrained)
             in_filters      = [40, 112, 160]
         elif backbone == "ghostnet":
-            #---------------------------------------------------#   
-            #   52,52,40；26,26,112；13,13,160
+            #---------------------------------------------------#
+            #   52,52,40; 26,26,112; 13,13,160
             #---------------------------------------------------#
             self.backbone   = GhostNet(pretrained=pretrained)
             in_filters      = [40, 112, 160]
         elif backbone == "vgg":
-            #---------------------------------------------------#   
+            #---------------------------------------------------#
             #   52,52,256；26,26,512；13,13,512
             #---------------------------------------------------#
             self.backbone   = VGG(pretrained=pretrained)
             in_filters      = [256, 512, 512]
         elif backbone in ["densenet121", "densenet169", "densenet201"]:
-            #---------------------------------------------------#   
-            #   52,52,256；26,26,512；13,13,1024
+            #---------------------------------------------------#
+            #   52,52,256; 26,26,512; 13,13,1024
             #---------------------------------------------------#
             self.backbone   = Densenet(backbone, pretrained=pretrained)
             in_filters = {
-                "densenet121" : [256, 512, 1024], 
-                "densenet169" : [256, 640, 1664], 
+                "densenet121" : [256, 512, 1024],
+                "densenet169" : [256, 640, 1664],
                 "densenet201" : [256, 896, 1920]
             }[backbone]
         elif backbone == "resnet50":
-            #---------------------------------------------------#   
+            #---------------------------------------------------#
             #   52,52,512；26,26,1024；13,13,2048
             #---------------------------------------------------#
             self.backbone   = ResNet(pretrained=pretrained)
             in_filters      = [512, 1024, 2048]
+        elif backbone in ["efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"]:
+            #---------------------------------------------------#
+            #   52,52,256; 26,26,512; 13,13,1024
+            #---------------------------------------------------#
+            self.backbone   = Efficient(backbone, pretrained=pretrained)
+            in_filters = {
+                "efficientnet_b0": [40, 112, 320],
+                "efficientnet_b1": [40, 112, 320],
+                "efficientnet_b2": [48, 120, 352],
+                "efficientnet_b3": [48, 136, 384],
+                "efficientnet_b4": [56, 160, 448],
+                "efficientnet_b5": [64, 176, 512],
+                "efficientnet_b6": [72, 200, 576],
+                "efficientnet_b7": [80, 224, 640]
+            }[backbone]
         else:
-            raise ValueError('Unsupported backbone - `{}`, Use mobilenetv1, mobilenetv2, mobilenetv3, ghostnet, vgg, densenet121, densenet169, densenet201, resnet50.'.format(backbone))
+            raise ValueError('Unsupported backbone - `{}`, Use mobilenetv1, mobilenetv2, mobilenetv3, ghostnet, vgg, densenet121, \
+            densenet169, densenet201, resnet50, efficientnet_b0, efficientnet_b1, efficientnet_b2, efficientnet_b3, \
+            efficientnet_b4, efficientnet_b5, efficientnet_b6, efficientnet_b7.'.format(backbone))
 
-        self.conv1           = make_three_conv([512, 1024], in_filters[2])
-        self.SPP             = SpatialPyramidPooling()
-        self.conv2           = make_three_conv([512, 1024], 2048)
+        #---------------------------------------------------#
+        #   用mobilenetV3举例
+        #---------------------------------------------------#
 
-        self.upsample1       = Upsample(512, 256)
-        self.conv_for_P4     = conv2d(in_filters[1], 256,1)
-        self.make_five_conv1 = make_five_conv([256, 512], 512)
+        #---------------------------------------------------#
+        #   SPP部分,不同分支池化
+        #---------------------------------------------------#
+        self.conv1           = make_three_conv([512, 1024], in_filters[2])  # 13,13, 160 -> 13,13, 512  使用不同模型唯一变化的就是用了in_filters的卷积
+        self.SPP             = SpatialPyramidPooling()                      # 13,13, 512 -> 13,13,2048
+        self.conv2           = make_three_conv([512, 1024], 2048)           # 13,13,2048 -> 13,13, 512
 
-        self.upsample2       = Upsample(256, 128)
-        self.conv_for_P3     = conv2d(in_filters[0], 128,1)
-        self.make_five_conv2 = make_five_conv([128, 256], 256)
+        #---------------------------------------------------#
+        #   上采样部分 2次  p3,p4要先进行1x1卷积降低维度
+        #---------------------------------------------------#
+        self.upsample1       = Upsample(512, 256)               # 13,13,512 -> 26,26,256    p5的1x1conv+上采样
+        self.conv_for_P4     = conv2d(in_filters[1], 256, 1)    # 26,26,112 -> 26,26,256    拼接之前的1x1conv   使用不同模型唯一变化的就是用了in_filters的卷积
+        self.make_five_conv1 = make_five_conv([256, 512], 512)  # 26,26,512 -> 26,26,256
 
+        self.upsample2       = Upsample(256, 128)               # 26,26,256 -> 52,52,128    p4的1x1conv+上采样
+        self.conv_for_P3     = conv2d(in_filters[0], 128, 1)    # 52,52, 40 -> 52,52,128    拼接之前的1x1conv   使用不同模型唯一变化的就是用了in_filters的卷积
+        self.make_five_conv2 = make_five_conv([128, 256], 256)  # 52,52,256 -> 52,52,128
+
+        #---------------------------------------------------#
+        #   head部分
+        #   下采样部分 2次 重新计算P4 P5    输入数据不需要预先进行1x1卷积
+        #   3x3Conv -> 3x3DWConv
+        #---------------------------------------------------#
         # 3*(5+num_classes) = 3*(5+20) = 3*(4+1+20)=75
         self.yolo_head3      = yolo_head([256, len(anchors_mask[0]) * (5 + num_classes)], 128)
-
-        self.down_sample1    = conv_dw(128, 256, stride = 2)
-        self.make_five_conv3 = make_five_conv([256, 512], 512)
+        self.down_sample1    = conv_dw(128, 256, stride = 2)     # 52,52,128 -> 26,26,256
+        self.make_five_conv3 = make_five_conv([256, 512], 512)   # 26,26,512 -> 26,26,256
 
         # 3*(5+num_classes) = 3*(5+20) = 3*(4+1+20)=75
         self.yolo_head2      = yolo_head([512, len(anchors_mask[1]) * (5 + num_classes)], 256)
 
-        self.down_sample2    = conv_dw(256, 512, stride = 2)
-        self.make_five_conv4 = make_five_conv([512, 1024], 1024)
+        self.down_sample2    = conv_dw(256, 512, stride = 2)     # 26,26,256  -> 13,13,512
+        self.make_five_conv4 = make_five_conv([512, 1024], 1024) # 13,13,1024 -> 13,13,512
 
         # 3*(5+num_classes)=3*(5+20)=3*(4+1+20)=75
         self.yolo_head1      = yolo_head([1024, len(anchors_mask[2]) * (5 + num_classes)], 512)
 
-
     def forward(self, x):
-        #  backbone
+        #---------------------------------------------------#
+        #   backbone, mobilenetV3举例
+        #   52,52,40; 26,26,112; 13,13,160
+        #---------------------------------------------------#
         x2, x1, x0 = self.backbone(x)
 
-        # 13,13,1024 -> 13,13,512 -> 13,13,1024 -> 13,13,512 -> 13,13,2048 
-        P5 = self.conv1(x0)
-        P5 = self.SPP(P5)
-        # 13,13,2048 -> 13,13,512 -> 13,13,1024 -> 13,13,512
-        P5 = self.conv2(P5)
+        #---------------------------------------------------#
+        #   SPP部分,不同分支池化
+        #---------------------------------------------------#
+        P5 = self.conv1(x0)     # 13,13, 160 -> 13,13, 512
+        P5 = self.SPP(P5)       # 13,13, 512 -> 13,13,2048
+        P5 = self.conv2(P5)     # 13,13,2048 -> 13,13, 512
 
-        # 13,13,512 -> 13,13,256 -> 26,26,256
-        P5_upsample = self.upsample1(P5)
-        # 26,26,512 -> 26,26,256
-        P4 = self.conv_for_P4(x1)
-        # 26,26,256 + 26,26,256 -> 26,26,512
-        P4 = torch.cat([P4,P5_upsample],axis=1)
-        # 26,26,512 -> 26,26,256 -> 26,26,512 -> 26,26,256 -> 26,26,512 -> 26,26,256
-        P4 = self.make_five_conv1(P4)
+        #---------------------------------------------------#
+        #   上采样部分 2次
+        #---------------------------------------------------#
+        P5_upsample = self.upsample1(P5)            # 13,13,512 -> 26,26,256
+        P4 = self.conv_for_P4(x1)                   # 26,26,112 -> 26,26,256
+        P4 = torch.cat([P4,P5_upsample],axis=1)     # 26,26,256 + 26,26,256 -> 26,26,512
+        P4 = self.make_five_conv1(P4)               # 26,26,512 -> 26,26,256
 
-        # 26,26,256 -> 26,26,128 -> 52,52,128
-        P4_upsample = self.upsample2(P4)
-        # 52,52,256 -> 52,52,128
-        P3 = self.conv_for_P3(x2)
-        # 52,52,128 + 52,52,128 -> 52,52,256
-        P3 = torch.cat([P3,P4_upsample],axis=1)
-        # 52,52,256 -> 52,52,128 -> 52,52,256 -> 52,52,128 -> 52,52,256 -> 52,52,128
-        P3 = self.make_five_conv2(P3)
+        P4_upsample = self.upsample2(P4)            # 26,26,256 -> 52,52,128
+        P3 = self.conv_for_P3(x2)                   # 52,52, 40 -> 52,52,128
+        P3 = torch.cat([P3,P4_upsample],axis=1)     # 52,52,128 + 52,52,128 -> 52,52,256
+        P3 = self.make_five_conv2(P3)               # 52,52,256 -> 52,52,128
 
-        # 52,52,128 -> 26,26,256
-        P3_downsample = self.down_sample1(P3)
-        # 26,26,256 + 26,26,256 -> 26,26,512
-        P4 = torch.cat([P3_downsample,P4],axis=1)
-        # 26,26,512 -> 26,26,256 -> 26,26,512 -> 26,26,256 -> 26,26,512 -> 26,26,256
-        P4 = self.make_five_conv3(P4)
+        #---------------------------------------------------#
+        #   下采样部分 2次 重新计算P4 P5
+        #---------------------------------------------------#
+        P3_downsample = self.down_sample1(P3)       # 52,52,128 -> 26,26,256
+        P4 = torch.cat([P3_downsample,P4],axis=1)   # 26,26,256 + 26,26,256 -> 26,26,512
+        P4 = self.make_five_conv3(P4)               # 26,26,512 -> 26,26,256
 
-        # 26,26,256 -> 13,13,512
-        P4_downsample = self.down_sample2(P4)
-        # 13,13,512 + 13,13,512 -> 13,13,1024
-        P5 = torch.cat([P4_downsample,P5],axis=1)
-        # 13,13,1024 -> 13,13,512 -> 13,13,1024 -> 13,13,512 -> 13,13,1024 -> 13,13,512
-        P5 = self.make_five_conv4(P5)
+        P4_downsample = self.down_sample2(P4)       # 26,26,256  -> 13,13,512
+        P5 = torch.cat([P4_downsample,P5],axis=1)   # 13,13,512 + 13,13,512 -> 13,13,1024
+        P5 = self.make_five_conv4(P5)               # 13,13,1024 -> 13,13,512
 
         #---------------------------------------------------#
         #   第三个特征层
-        #   y3=(batch_size,75,52,52)
+        #   y3=(b,75,52,52)
         #---------------------------------------------------#
         out2 = self.yolo_head3(P3)
         #---------------------------------------------------#
         #   第二个特征层
-        #   y2=(batch_size,75,26,26)
+        #   y2=(b,75,26,26)
         #---------------------------------------------------#
         out1 = self.yolo_head2(P4)
         #---------------------------------------------------#
         #   第一个特征层
-        #   y1=(batch_size,75,13,13)
+        #   y1=(b,75,13,13)
         #---------------------------------------------------#
         out0 = self.yolo_head1(P5)
 

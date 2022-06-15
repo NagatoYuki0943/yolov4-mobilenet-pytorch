@@ -51,7 +51,7 @@ from utils.utils_fit import fit_one_epoch
 2、损失值的大小用于判断是否收敛，比较重要的是有收敛的趋势，即验证集损失不断下降，如果验证集损失基本上不改变的话，模型基本上就收敛了。
    损失值的具体大小并没有什么意义，大和小只在于损失的计算方式，并不是接近于0才好。如果想要让损失好看点，可以直接到对应的损失函数里面除上10000。
    训练过程中的损失值会保存在logs文件夹下的loss_%Y_%m_%d_%H_%M_%S文件夹中
-   
+
 3、训练好的权值文件保存在logs文件夹中，每个训练世代（Epoch）包含若干训练步长（Step），每个训练步长（Step）进行一次梯度下降。
    如果只是训练了几个Step是不会保存的，Epoch和Step的概念要捋清楚一下。
 '''
@@ -81,9 +81,9 @@ if __name__ == "__main__":
     #   fp16        是否使用混合精度训练
     #               可减少约一半的显存、需要pytorch1.7.1以上
     #---------------------------------------------------------------------#
-    fp16            = False
+    fp16            = True
     #---------------------------------------------------------------------#
-    #   classes_path    指向model_data下的txt，与自己训练的数据集相关 
+    #   classes_path    指向model_data下的txt，与自己训练的数据集相关
     #                   训练前一定要修改classes_path，使其对应自己的数据集
     #---------------------------------------------------------------------#
     classes_path    = 'model_data/voc_classes.txt'
@@ -100,20 +100,20 @@ if __name__ == "__main__":
     #
     #   如果训练过程中存在中断训练的操作，可以将model_path设置成logs文件夹下的权值文件，将已经训练了一部分的权值再次载入。
     #   同时修改下方的 冻结阶段 或者 解冻阶段 的参数，来保证模型epoch的连续性。
-    #   
+    #
     #   当model_path = ''的时候不加载整个模型的权值。
     #
     #   此处使用的是整个模型的权重，因此是在train.py进行加载的，下面的pretrain不影响此处的权值加载。
     #   如果想要让模型从主干的预训练权值开始训练，则设置model_path = ''，下面的pretrain = True，此时仅加载主干。
     #   如果想要让模型从0开始训练，则设置model_path = ''，下面的pretrain = Fasle，Freeze_Train = Fasle，此时从0开始训练，且没有冻结主干的过程。
-    #   
+    #
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   从0开始训练有两个方案：
     #   1、得益于Mosaic数据增强方法强大的数据增强能力，将UnFreeze_Epoch设置的较大（300及以上）、batch较大（16及以上）、数据较多（万以上）的情况下，
     #      可以设置mosaic=True，直接随机初始化参数开始训练，但得到的效果仍然不如有预训练的情况。（像COCO这样的大数据集可以这样做）
     #   2、了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path      = 'model_data/yolov4_mobilenet_v1_voc.pth'
+    model_path      = ''
     #------------------------------------------------------#
     #   input_shape     输入的shape大小，一定要是32的倍数
     #------------------------------------------------------#
@@ -129,15 +129,23 @@ if __name__ == "__main__":
     #   densenet169
     #   densenet201
     #   resnet50
+    #   efficientnet_b0
+    #   efficientnet_b1
+    #   efficientnet_b2
+    #   efficientnet_b3
+    #   efficientnet_b4
+    #   efficientnet_b5
+    #   efficientnet_b6
+    #   efficientnet_b7
     #-------------------------------#
-    backbone        = "mobilenetv1"
+    backbone        = "efficientnet_b0"
     #----------------------------------------------------------------------------------------------------------------------------#
     #   pretrained      是否使用主干网络的预训练权重，此处使用的是主干的权重，因此是在模型构建的时候进行加载的。
     #                   如果设置了model_path，则主干的权值无需加载，pretrained的值无意义。
     #                   如果不设置model_path，pretrained = True，此时仅加载主干开始训练。
     #                   如果不设置model_path，pretrained = False，Freeze_Train = Fasle，此时从0开始训练，且没有冻结主干的过程。
     #----------------------------------------------------------------------------------------------------------------------------#
-    pretrained      = False
+    pretrained      = True
     #------------------------------------------------------------------#
     #   mosaic              马赛克数据增强。
     #   mosaic_prob         每个step有多少概率使用mosaic数据增强，默认50%。
@@ -166,15 +174,15 @@ if __name__ == "__main__":
     #----------------------------------------------------------------------------------------------------------------------------#
     #   训练分为两个阶段，分别是冻结阶段和解冻阶段。设置冻结阶段是为了满足机器性能不足的同学的训练需求。
     #   冻结训练需要的显存较小，显卡非常差的情况下，可设置Freeze_Epoch等于UnFreeze_Epoch，此时仅仅进行冻结训练。
-    #      
+    #
     #   在此提供若干参数设置建议，各位训练者根据自己的需求进行灵活调整：
-    #   （一）从整个模型的预训练权重开始训练： 
+    #   （一）从整个模型的预训练权重开始训练：
     #       Adam：
     #           Init_Epoch = 0，Freeze_Epoch = 50，UnFreeze_Epoch = 100，Freeze_Train = True，optimizer_type = 'adam'，Init_lr = 1e-3，weight_decay = 0。（冻结）
     #           Init_Epoch = 0，UnFreeze_Epoch = 100，Freeze_Train = False，optimizer_type = 'adam'，Init_lr = 1e-3，weight_decay = 0。（不冻结）
     #       SGD：
-    #           Init_Epoch = 0，Freeze_Epoch = 50，UnFreeze_Epoch = 300，Freeze_Train = True，optimizer_type = 'sgd'，Init_lr = 1e-2，weight_decay = 5e-4。（冻结）
-    #           Init_Epoch = 0，UnFreeze_Epoch = 300，Freeze_Train = False，optimizer_type = 'sgd'，Init_lr = 1e-2，weight_decay = 5e-4。（不冻结）
+    #           Init_Epoch = 0，Freeze_Epoch = 50，UnFreeze_Epoch = 100，Freeze_Train = True，optimizer_type = 'sgd'，Init_lr = 1e-2，weight_decay = 5e-4。（冻结）
+    #           Init_Epoch = 0，UnFreeze_Epoch = 100，Freeze_Train = False，optimizer_type = 'sgd'，Init_lr = 1e-2，weight_decay = 5e-4。（不冻结）
     #       其中：UnFreeze_Epoch可以在100-300之间调整。
     #   （二）从主干网络的预训练权重开始训练：
     #       Adam：
@@ -226,7 +234,7 @@ if __name__ == "__main__":
     #                   默认先冻结主干训练后解冻训练。
     #------------------------------------------------------------------#
     Freeze_Train        = True
-    
+
     #------------------------------------------------------------------#
     #   其它训练参数：学习率、优化器、学习率下降有关
     #------------------------------------------------------------------#
@@ -281,7 +289,7 @@ if __name__ == "__main__":
     #------------------------------------------------------------------#
     #   num_workers     用于设置是否使用多线程读取数据
     #                   开启后会加快数据读取速度，但是会占用更多内存
-    #                   内存较小的电脑可以设置为2或者0  
+    #                   内存较小的电脑可以设置为2或者0
     #------------------------------------------------------------------#
     num_workers         = 4
 
@@ -310,11 +318,12 @@ if __name__ == "__main__":
 
     #----------------------------------------------------#
     #   下载预训练权重
+    #   efficientnet不用在这里下载预训练权重
     #----------------------------------------------------#
-    if pretrained:
+    if pretrained and "efficientnet" not in backbone:
         if distributed:
             if local_rank == 0:
-                download_weights(backbone)  
+                download_weights(backbone)
             dist.barrier()
         else:
             download_weights(backbone)
@@ -337,7 +346,7 @@ if __name__ == "__main__":
         #------------------------------------------------------#
         if local_rank == 0:
             print('Load weights {}.'.format(model_path))
-        
+
         #------------------------------------------------------#
         #   根据预训练权重的Key和模型的Key进行加载
         #------------------------------------------------------#
@@ -372,8 +381,8 @@ if __name__ == "__main__":
         log_dir         = os.path.join(save_dir, "loss_" + str(time_str))
         loss_history    = LossHistory(log_dir, model, input_shape=input_shape)
     else:
-        loss_history    = None
-        
+        loss_history = None
+
     #------------------------------------------------------------------#
     #   torch 1.2不支持amp，建议使用torch 1.7.1及以上正确使用fp16
     #   因此torch1.2这里显示"could not be resolve"
@@ -424,7 +433,7 @@ if __name__ == "__main__":
         )
         #---------------------------------------------------------#
         #   总训练世代指的是遍历全部数据的总次数
-        #   总训练步长指的是梯度下降的总次数 
+        #   总训练步长指的是梯度下降的总次数
         #   每个训练世代包含若干训练步长，每个训练步长进行一次梯度下降。
         #   此处仅建议最低训练世代，上不封顶，计算时只考虑了解冻部分
         #----------------------------------------------------------#
@@ -472,14 +481,14 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   根据optimizer_type选择优化器
         #---------------------------------------#
-        pg0, pg1, pg2 = [], [], []  
+        pg0, pg1, pg2 = [], [], []
         for k, v in model.named_modules():
             if hasattr(v, "bias") and isinstance(v.bias, nn.Parameter):
-                pg2.append(v.bias)    
+                pg2.append(v.bias)
             if isinstance(v, nn.BatchNorm2d) or "bn" in k:
-                pg0.append(v.weight)    
+                pg0.append(v.weight)
             elif hasattr(v, "weight") and isinstance(v.weight, nn.Parameter):
-                pg1.append(v.weight)   
+                pg1.append(v.weight)
         optimizer = {
             'adam'  : optim.Adam(pg0, Init_lr_fit, betas = (momentum, 0.999)),
             'adamw' : optim.AdamW(pg0, Init_lr_fit, betas = (momentum, 0.999)),
@@ -492,13 +501,13 @@ if __name__ == "__main__":
         #   获得学习率下降的公式
         #---------------------------------------#
         lr_scheduler_func = get_lr_scheduler(lr_decay_type, Init_lr_fit, Min_lr_fit, UnFreeze_Epoch)
-        
+
         #---------------------------------------#
         #   判断每一个世代的长度
         #---------------------------------------#
         epoch_step      = num_train // batch_size
         epoch_step_val  = num_val // batch_size
-        
+
         if epoch_step == 0 or epoch_step_val == 0:
             raise ValueError("数据集过小，无法继续进行训练，请扩充数据集。")
 
@@ -509,7 +518,7 @@ if __name__ == "__main__":
                                         mosaic=mosaic, mixup=mixup, mosaic_prob=mosaic_prob, mixup_prob=mixup_prob, train=True, special_aug_ratio=special_aug_ratio)
         val_dataset     = YoloDataset(val_lines, input_shape, num_classes, epoch_length = UnFreeze_Epoch, \
                                         mosaic=False, mixup=False, mosaic_prob=0, mixup_prob=0, train=False, special_aug_ratio=0)
-        
+
         if distributed:
             train_sampler   = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True,)
             val_sampler     = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False,)
@@ -522,7 +531,7 @@ if __name__ == "__main__":
 
         gen             = DataLoader(train_dataset, shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
                                     drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler)
-        gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True, 
+        gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
                                     drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler)
 
         #----------------------#
@@ -533,7 +542,7 @@ if __name__ == "__main__":
                                             eval_flag=eval_flag, period=eval_period)
         else:
             eval_callback   = None
-        
+
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
@@ -570,10 +579,10 @@ if __name__ == "__main__":
 
                 if distributed:
                     batch_size = batch_size // ngpus_per_node
-                    
+
                 gen             = DataLoader(train_dataset, shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
                                             drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler)
-                gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True, 
+                gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
                                             drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler)
 
                 UnFreeze_flag = True
@@ -587,7 +596,7 @@ if __name__ == "__main__":
             set_optimizer_lr(optimizer, lr_scheduler_func, epoch)
 
             fit_one_epoch(model_train, model, yolo_loss, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, UnFreeze_Epoch, Cuda, fp16, scaler, save_period, save_dir, local_rank)
-                        
+
             if distributed:
                 dist.barrier()
 

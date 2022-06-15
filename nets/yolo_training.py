@@ -25,7 +25,7 @@ class YOLOLoss(nn.Module):
         self.box_ratio      = 0.05
         self.obj_ratio      = 5 * (input_shape[0] * input_shape[1]) / (416 ** 2)
         self.cls_ratio      = 1 * (num_classes / 80)
-        
+
         self.focal_loss         = focal_loss
         self.focal_loss_ratio   = 10
         self.alpha              = alpha
@@ -48,7 +48,7 @@ class YOLOLoss(nn.Module):
         pred    = self.clip_by_tensor(pred, epsilon, 1.0 - epsilon)
         output  = - target * torch.log(pred) - (1.0 - target) * torch.log(1.0 - pred)
         return output
-        
+
     def box_ciou(self, b1, b2):
         """
         输入为：
@@ -93,7 +93,7 @@ class YOLOLoss(nn.Module):
         #   计算中心的差距
         #----------------------------------------------------#
         center_distance = torch.sum(torch.pow((b1_xy - b2_xy), 2), axis=-1)
-        
+
         #----------------------------------------------------#
         #   找到包裹两个框的最小框的左上角和右下角
         #----------------------------------------------------#
@@ -105,7 +105,7 @@ class YOLOLoss(nn.Module):
         #----------------------------------------------------#
         enclose_diagonal = torch.sum(torch.pow(enclose_wh,2), axis=-1)
         ciou            = iou - 1.0 * (center_distance) / torch.clamp(enclose_diagonal,min = 1e-6)
-        
+
         v       = (4 / (math.pi ** 2)) * torch.pow((torch.atan(b1_wh[..., 0] / torch.clamp(b1_wh[..., 1],min = 1e-6)) - torch.atan(b2_wh[..., 0] / torch.clamp(b2_wh[..., 1], min = 1e-6))), 2)
         alpha   = v / torch.clamp((1.0 - iou + v), min=1e-6)
         ciou    = ciou - alpha * v
@@ -134,7 +134,7 @@ class YOLOLoss(nn.Module):
         #-----------------------------------------------------------------------#
         #   计算步长
         #   每一个特征点对应原来的图片上多少个像素点
-        #   
+        #
         #   如果特征层为13x13的话，一个特征点就对应原来的图片上的32个像素点
         #   如果特征层为26x26的话，一个特征点就对应原来的图片上的16个像素点
         #   如果特征层为52x52的话，一个特征点就对应原来的图片上的8个像素点
@@ -155,7 +155,7 @@ class YOLOLoss(nn.Module):
         #   batch_size, 3, 52, 52, 5 + num_classes
         #-----------------------------------------------#
         prediction = input.view(bs, len(self.anchors_mask[l]), self.bbox_attrs, in_h, in_w).permute(0, 1, 3, 4, 2).contiguous()
-        
+
         #-----------------------------------------------#
         #   先验框的中心位置的调整参数
         #-----------------------------------------------#
@@ -210,7 +210,7 @@ class YOLOLoss(nn.Module):
             ciou        = self.box_ciou(pred_boxes, y_true[..., :4]).type_as(x)
             # loss_loc    = torch.mean((1 - ciou)[obj_mask] * box_loss_scale[obj_mask])
             loss_loc    = torch.mean((1 - ciou)[obj_mask])
-            
+
             loss_cls    = torch.mean(self.BCELoss(pred_cls[obj_mask], y_true[..., 5:][obj_mask]))
             loss        += loss_loc * self.box_ratio + loss_cls * self.cls_ratio
 
@@ -218,10 +218,10 @@ class YOLOLoss(nn.Module):
         #   计算是否包含物体的置信度损失
         #---------------------------------------------------------------#
         if self.focal_loss:
-            pos_neg_ratio   = torch.where(obj_mask, torch.ones_like(conf) * self.alpha, torch.ones_like(conf) * (1 - self.alpha)) 
+            pos_neg_ratio   = torch.where(obj_mask, torch.ones_like(conf) * self.alpha, torch.ones_like(conf) * (1 - self.alpha))
             hard_easy_ratio = torch.where(obj_mask, torch.ones_like(conf) - conf, conf) ** self.gamma
             loss_conf   = torch.mean((self.BCELoss(conf, obj_mask.type_as(conf)) * pos_neg_ratio * hard_easy_ratio)[noobj_mask.bool() | obj_mask]) * self.focal_loss_ratio
-        else: 
+        else:
             loss_conf   = torch.mean(self.BCELoss(conf, obj_mask.type_as(conf))[noobj_mask.bool() | obj_mask])
         loss        += loss_conf * self.balance[l] * self.obj_ratio
         # if n != 0:
@@ -271,7 +271,7 @@ class YOLOLoss(nn.Module):
         #-----------------------------------------------------------#
         union = area_a + area_b - inter
         return inter / union  # [A,B]
-    
+
     def get_target(self, l, targets, anchors, in_h, in_w):
         #-----------------------------------------------------#
         #   计算一共有多少张图片
@@ -289,7 +289,7 @@ class YOLOLoss(nn.Module):
         #   batch_size, 3, 13, 13, 5 + num_classes
         #-----------------------------------------------------#
         y_true          = torch.zeros(bs, len(self.anchors_mask[l]), in_h, in_w, self.bbox_attrs, requires_grad = False)
-        for b in range(bs):            
+        for b in range(bs):
             if len(targets[b])==0:
                 continue
             batch_target = torch.zeros_like(targets[b])
@@ -300,7 +300,7 @@ class YOLOLoss(nn.Module):
             batch_target[:, [1,3]] = targets[b][:, [1,3]] * in_h
             batch_target[:, 4] = targets[b][:, 4]
             batch_target = batch_target.cpu()
-            
+
             #-------------------------------------------------------#
             #   将真实框转换一个形式
             #   num_true_box, 4
@@ -335,7 +335,7 @@ class YOLOLoss(nn.Module):
                 #   取出真实框的种类
                 #----------------------------------------#
                 c = batch_target[t, 4].long()
-                
+
                 #----------------------------------------#
                 #   noobj_mask代表无目标的特征点
                 #----------------------------------------#
@@ -374,7 +374,7 @@ class YOLOLoss(nn.Module):
         scaled_anchors_l = np.array(scaled_anchors)[self.anchors_mask[l]]
         anchor_w = torch.Tensor(scaled_anchors_l).index_select(1, torch.LongTensor([0])).type_as(x)
         anchor_h = torch.Tensor(scaled_anchors_l).index_select(1, torch.LongTensor([1])).type_as(x)
-        
+
         anchor_w = anchor_w.repeat(bs, 1).repeat(1, 1, in_h * in_w).view(w.shape)
         anchor_h = anchor_h.repeat(bs, 1).repeat(1, 1, in_h * in_w).view(h.shape)
         #-------------------------------------------------------#
@@ -385,8 +385,8 @@ class YOLOLoss(nn.Module):
         pred_boxes_w    = torch.unsqueeze(torch.exp(w) * anchor_w, -1)
         pred_boxes_h    = torch.unsqueeze(torch.exp(h) * anchor_h, -1)
         pred_boxes      = torch.cat([pred_boxes_x, pred_boxes_y, pred_boxes_w, pred_boxes_h], dim = -1)
-        
-        for b in range(bs):           
+
+        for b in range(bs):
             #-------------------------------------------------------#
             #   将预测结果转换一个形式
             #   pred_boxes_for_ignore      num_anchors, 4

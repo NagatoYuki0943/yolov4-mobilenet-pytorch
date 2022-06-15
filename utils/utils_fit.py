@@ -72,9 +72,9 @@ def fit_one_epoch(model_train, model, yolo_loss, loss_history, eval_callback, op
             scaler.update()
 
         loss += loss_value.item()
-        
+
         if local_rank == 0:
-            pbar.set_postfix(**{'loss'  : loss / (iteration + 1), 
+            pbar.set_postfix(**{'loss'  : loss / (iteration + 1),
                                 'lr'    : get_lr(optimizer)})
             pbar.update(1)
 
@@ -115,7 +115,7 @@ def fit_one_epoch(model_train, model, yolo_loss, loss_history, eval_callback, op
         if local_rank == 0:
             pbar.set_postfix(**{'val_loss': val_loss / (iteration + 1)})
             pbar.update(1)
- 
+
     if local_rank == 0:
         pbar.close()
         print('Finish Validation')
@@ -123,7 +123,7 @@ def fit_one_epoch(model_train, model, yolo_loss, loss_history, eval_callback, op
         eval_callback.on_epoch_end(epoch + 1, model_train)
         print('Epoch:'+ str(epoch + 1) + '/' + str(Epoch))
         print('Total Loss: %.3f || Val Loss: %.3f ' % (loss / epoch_step, val_loss / epoch_step_val))
-        
+
         #-----------------------------------------------#
         #   保存权值
         #-----------------------------------------------#
@@ -133,5 +133,5 @@ def fit_one_epoch(model_train, model, yolo_loss, loss_history, eval_callback, op
         if len(loss_history.val_loss) <= 1 or (val_loss / epoch_step_val) <= min(loss_history.val_loss):
             print('Save best model to best_epoch_weights.pth')
             torch.save(model.state_dict(), os.path.join(save_dir, "best_epoch_weights.pth"))
-            
+
         torch.save(model.state_dict(), os.path.join(save_dir, "last_epoch_weights.pth"))
