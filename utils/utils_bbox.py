@@ -109,7 +109,10 @@ class DecodeBox():
             # 缩放系数
             _scale = torch.Tensor([input_width, input_height, input_width, input_height]).type(FloatTensor)
             #----------------------------------------------------------#
-            #   [b, num_anchors, 85] 85 = x y w h 先验框置信度 种类置信度
+            #   output: [b, 3*13*13, 85]
+            #           [b, 3*26*26, 85]
+            #           [b, 3*52*52, 85]
+            #   85: x y w h 先验框置信度 种类置信度
             #----------------------------------------------------------#
             output = torch.cat((pred_boxes.view(batch_size, -1, 4) / _scale,
                                 conf.view(batch_size, -1, 1), pred_cls.view(batch_size, -1, self.num_classes)), -1)
@@ -230,4 +233,10 @@ class DecodeBox():
                 output[i]           = output[i].cpu().numpy()
                 box_xy, box_wh      = (output[i][:, 0:2] + output[i][:, 2:4])/2, output[i][:, 2:4] - output[i][:, 0:2]
                 output[i][:, :4]    = self.yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
+        #-----------------------------------------------#
+        #   results = [[
+        #               [x1, y1, x2, y2, obj_conf(是否包含物体置信度), class_conf(种类置信度), class_pred(种类预测值)],
+        #               ...
+        #           ]]
+        #-----------------------------------------------#
         return output
