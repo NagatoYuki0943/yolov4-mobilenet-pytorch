@@ -102,9 +102,15 @@ class DecodeBox():
             pred_boxes[..., 3]  = torch.exp(h.data) * anchor_h
 
             #----------------------------------------------------------#
-            #   将输出结果归一化成小数的形式
+            #   将xywh归一化成小数的形式,目前的移动是相对于13x13的调整,除以13之后就相对于宽高归一化了(也相对于原图归一化了,这里的13相对于原图就是416)
+            #   前面宽高除以了32,这里再除以13,就相当于除以了416,相对对原图归一化
+            #   input_width=input_height=13,26,52
             #----------------------------------------------------------#
+            # 缩放系数
             _scale = torch.Tensor([input_width, input_height, input_width, input_height]).type(FloatTensor)
+            #----------------------------------------------------------#
+            #   [b, num_anchors, 85] 85 = x y w h 先验框置信度 种类置信度
+            #----------------------------------------------------------#
             output = torch.cat((pred_boxes.view(batch_size, -1, 4) / _scale,
                                 conf.view(batch_size, -1, 1), pred_cls.view(batch_size, -1, self.num_classes)), -1)
             outputs.append(output.data)
