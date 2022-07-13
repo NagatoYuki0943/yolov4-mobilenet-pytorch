@@ -145,15 +145,15 @@ class DecodeBox():
 
     def non_max_suppression(self, prediction, num_classes, input_shape, image_shape, letterbox_image, conf_thres=0.5, nms_thres=0.4):
         #----------------------------------------------------------#
-        #   将预测结果的格式转换成左上角右下角的格式。
+        #   将预测结果的格式转换成左上角右下角的格式,坐标宽高相对原图是归一化的
         #   prediction  [batch_size, num_anchors, 85]
         #----------------------------------------------------------#
         box_corner          = prediction.new(prediction.shape)
-        box_corner[:, :, 0] = prediction[:, :, 0] - prediction[:, :, 2] / 2
-        box_corner[:, :, 1] = prediction[:, :, 1] - prediction[:, :, 3] / 2
-        box_corner[:, :, 2] = prediction[:, :, 0] + prediction[:, :, 2] / 2
-        box_corner[:, :, 3] = prediction[:, :, 1] + prediction[:, :, 3] / 2
-        prediction[:, :, :4] = box_corner[:, :, :4]
+        box_corner[:, :, 0] = prediction[:, :, 0] - prediction[:, :, 2] / 2     # x - 1/2 w = x1
+        box_corner[:, :, 1] = prediction[:, :, 1] - prediction[:, :, 3] / 2     # y - 1/2 h = y1
+        box_corner[:, :, 2] = prediction[:, :, 0] + prediction[:, :, 2] / 2     # x + 1/2 w = x2
+        box_corner[:, :, 3] = prediction[:, :, 1] + prediction[:, :, 3] / 2     # y + 1/2 h = y2
+        prediction[:, :, :4] = box_corner[:, :, :4]                             # 替换前4个数据换成左上角右下角的格式
 
         output = [None for _ in range(len(prediction))]
         for i, image_pred in enumerate(prediction):
@@ -202,7 +202,7 @@ class DecodeBox():
                 #   使用官方自带的非极大抑制会速度更快一些！
                 #------------------------------------------#
                 keep = nms(
-                    detections_class[:, :4],                            # 坐标
+                    detections_class[:, :4],                            # 坐标,是相对于原始宽高归一化的坐标
                     detections_class[:, 4] * detections_class[:, 5],    # 先验框置信度 * 种类置信度 结果是1维数据
                     nms_thres
                 )
